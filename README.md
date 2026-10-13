@@ -3,7 +3,7 @@
 Real-time 3D localization of ArUco fiducial markers using **ROS 2 Jazzy**, **OpenCV** and **TF2**.
 Developed as part of my Bachelor's Thesis (TFG) at the Budapest University of Technology and Economics (BME), working with the lab's robotic platforms under weekly supervision.
 
-<!-- DEMO: add a screenshot/GIF of the 3D axes drawn over the marker here -->
+![Detected ArUco marker with 3D axes](docs/media/demo.png)
 
 ## Overview
 
