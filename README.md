@@ -56,3 +56,4 @@ The thesis is developed in weekly iterations agreed with my supervisor.
 - **Camera intrinsics are placeholders** (fx = fy = 800, principal point at 320×240, zero distortion), so distances are approximate. Next: calibrate the real camera with the `camera_calibration` package.
 - Marker size, dictionary and frame names are hard-coded. Next: expose them as ROS parameters.
 - `estimatePoseSingleMarkers` is deprecated from OpenCV 4.7. Next: migrate to `cv::solvePnP`.
+- Poses are relative to the camera only. Next: use an ArUco marker fixed to the floor as the world reference frame, so marker poses become independent of the camera's position and tilt.
