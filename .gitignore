@@ -1,0 +1,13 @@
+# Artefactos de compilación de colcon (se regeneran al compilar)
+build/
+install/
+log/
+
+# Paquete del tutorial de ROS 2, no forma parte del proyecto
+src/cpp_pubsub/
+
+# Copias de seguridad de editores
+*.save
+*~
+*.swp
+.vscode/
