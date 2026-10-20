@@ -1,111 +1,105 @@
+// Detector node: detects ArUco markers in the camera image and publishes
+// the ID and pose (camera frame) of every marker on /aruco/markers.
+
+#include <memory>
+#include <vector>
+
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/image.hpp"
-#include "geometry_msgs/msg/pose_stamped.hpp"
 #include <cv_bridge/cv_bridge.hpp>
 #include <opencv2/opencv.hpp>
 #include <opencv2/aruco.hpp>
 
-// NUEVAS LIBRERÍAS TF2
-#include "tf2_ros/transform_broadcaster.h"
-#include "geometry_msgs/msg/transform_stamped.hpp"
-#include "tf2/LinearMath/Quaternion.h"
-#include "tf2/LinearMath/Matrix3x3.h"
+#include "aruco_interfaces/msg/marker.hpp"
+#include "aruco_interfaces/msg/marker_array.hpp"
+
+using aruco_interfaces::msg::Marker;
+using aruco_interfaces::msg::MarkerArray;
 
 class ArucoDetector : public rclcpp::Node {
 public:
-    ArucoDetector() : Node("aruco_detector_node") {
-        
-        subscription_ = this->create_subscription<sensor_msgs::msg::Image>(
-            "/image_raw", 10,
-            std::bind(&ArucoDetector::image_callback, this, std::placeholders::_1));
-            
-        image_publisher_ = this->create_publisher<sensor_msgs::msg::Image>("/aruco/image_out", 10);
-        
-        // Inicializar el emisor de transformaciones TF2
-        tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
-        
-        RCLCPP_INFO(this->get_logger(), "ArUco TF2 Broadcaster initialized...");
-    }
+  ArucoDetector() : Node("aruco_detector_node") {
+    // Parameters (can be changed at launch time without recompiling)
+    reference_id_   = declare_parameter<int>("reference_id", 1);
+    reference_size_ = declare_parameter<double>("reference_marker_size", 0.195);  // metres
+    robot_size_     = declare_parameter<double>("robot_marker_size", 0.10);       // metres
+
+    // The lab markers use a custom dictionary: 10 markers, 4x4 bits, seed 0
+    dictionary_ = cv::aruco::generateCustomDictionary(10, 4, 0);
+
+    // Placeholder camera intrinsics (to be replaced by a real calibration)
+    camera_matrix_ = (cv::Mat_<double>(3, 3) << 800.0, 0, 320.0, 0, 800.0, 240.0, 0, 0, 1);
+    dist_coeffs_ = cv::Mat::zeros(5, 1, CV_64F);
+
+    image_sub_ = create_subscription<sensor_msgs::msg::Image>(
+      "/image_raw", 10,
+      std::bind(&ArucoDetector::image_callback, this, std::placeholders::_1));
+    image_pub_   = create_publisher<sensor_msgs::msg::Image>("/aruco/image_out", 10);
+    markers_pub_ = create_publisher<MarkerArray>("/aruco/markers", 10);
+
+    RCLCPP_INFO(get_logger(), "ArUco detector ready (reference ID %d)", reference_id_);
+  }
 
 private:
-    void image_callback(const sensor_msgs::msg::Image::SharedPtr msg) {
-        try {
-            cv_bridge::CvImagePtr cv_ptr = cv_bridge::toCvCopy(msg, "bgr8");
-            cv::Mat frame = cv_ptr->image;
-            
-            std::vector<int> markerIds;
-            std::vector<std::vector<cv::Point2f>> markerCorners, rejectedCandidates;
-            
-            cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::generateCustomDictionary(10, 4, 0);
-            
-            cv::aruco::detectMarkers(frame, dictionary, markerCorners, markerIds);
-            
-            if (!markerIds.empty()) {
-                cv::aruco::drawDetectedMarkers(frame, markerCorners, markerIds);
-                
-                cv::Mat cameraMatrix = (cv::Mat_<double>(3, 3) << 800.0, 0, 320.0, 0, 800.0, 240.0, 0, 0, 1);
-                cv::Mat distCoeffs = cv::Mat::zeros(5, 1, CV_64F);
-                
-                std::vector<cv::Vec3d> rvecs, tvecs;
-                cv::aruco::estimatePoseSingleMarkers(markerCorners, 0.10f, cameraMatrix, distCoeffs, rvecs, tvecs);
-                
-                for (size_t i = 0; i < markerIds.size(); ++i) {
-                    cv::drawFrameAxes(frame, cameraMatrix, distCoeffs, rvecs[i], tvecs[i], 0.05f);
-                    
-                    // --- LÓGICA TF2 ---
-                    geometry_msgs::msg::TransformStamped t;
-                    t.header.stamp = this->now();
-                    t.header.frame_id = "camera_frame";
-                    // Creamos un nombre dinámico (ej: "marker_0", "marker_45")
-                    t.child_frame_id = "marker_" + std::to_string(markerIds[i]); 
-                    
-                    // 1. Traslación (Posición X, Y, Z)
-                    t.transform.translation.x = tvecs[i][0];
-                    t.transform.translation.y = tvecs[i][1];
-                    t.transform.translation.z = tvecs[i][2];
-                    
-                    // 2. Rotación: Convertir el vector 'rvec' de OpenCV a una Matriz de 3x3
-                    cv::Mat rot_mat;
-                    cv::Rodrigues(rvecs[i], rot_mat);
-                    
-                    // 3. Pasar la matriz de OpenCV a TF2
-                    tf2::Matrix3x3 tf_rot(
-                        rot_mat.at<double>(0,0), rot_mat.at<double>(0,1), rot_mat.at<double>(0,2),
-                        rot_mat.at<double>(1,0), rot_mat.at<double>(1,1), rot_mat.at<double>(1,2),
-                        rot_mat.at<double>(2,0), rot_mat.at<double>(2,1), rot_mat.at<double>(2,2)
-                    );
-                    
-                    // 4. Extraer el Cuaternión (X, Y, Z, W)
-                    tf2::Quaternion q;
-                    tf_rot.getRotation(q);
-                    
-                    t.transform.rotation.x = q.x();
-                    t.transform.rotation.y = q.y();
-                    t.transform.rotation.z = q.z();
-                    t.transform.rotation.w = q.w();
-                    
-                    // Publicar la transformación en el árbol de ROS 2
-                    tf_broadcaster_->sendTransform(t);
-                    
-                    RCLCPP_INFO(this->get_logger(), "TF Broadcasted: camera_frame -> marker_%d", markerIds[i]);
-                }
-            }
-            
-            image_publisher_->publish(*cv_ptr->toImageMsg());
-            
-        } catch (cv_bridge::Exception& e) {
-            RCLCPP_ERROR(this->get_logger(), "cv_bridge exception: %s", e.what());
+  void image_callback(const sensor_msgs::msg::Image::SharedPtr msg) {
+    cv_bridge::CvImagePtr cv_ptr;
+    try {
+      cv_ptr = cv_bridge::toCvCopy(msg, "bgr8");
+    } catch (cv_bridge::Exception & e) {
+      RCLCPP_ERROR(get_logger(), "cv_bridge exception: %s", e.what());
+      return;
+    }
+    cv::Mat & frame = cv_ptr->image;
+
+    std::vector<int> ids;
+    std::vector<std::vector<cv::Point2f>> corners;
+    cv::aruco::detectMarkers(frame, dictionary_, corners, ids);
+
+    MarkerArray markers_msg;
+    markers_msg.header = msg->header;  // same timestamp as the image
+
+    if (!ids.empty()) {
+      cv::aruco::drawDetectedMarkers(frame, corners, ids);
+
+      for (size_t i = 0; i < ids.size(); ++i) {
+        // Each marker type has a different physical size
+        double size = (ids[i] == reference_id_) ? reference_size_ : robot_size_;
+
+        std::vector<std::vector<cv::Point2f>> single = {corners[i]};
+        std::vector<cv::Vec3d> rvecs, tvecs;
+        cv::aruco::estimatePoseSingleMarkers(single, size, camera_matrix_, dist_coeffs_, rvecs, tvecs);
+
+        cv::drawFrameAxes(frame, camera_matrix_, dist_coeffs_, rvecs[0], tvecs[0], size * 0.5);
+
+        Marker m;
+        m.id = ids[i];
+        for (int k = 0; k < 3; ++k) {
+          m.translation[k] = tvecs[0][k];
+          m.rotation[k] = rvecs[0][k];
         }
+        markers_msg.markers.push_back(m);
+      }
     }
 
-    rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr subscription_;
-    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_publisher_;
-    std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_; // Puntero al emisor de TF
+    markers_pub_->publish(markers_msg);
+    image_pub_->publish(*cv_ptr->toImageMsg());
+  }
+
+  int reference_id_;
+  double reference_size_;
+  double robot_size_;
+  cv::Ptr<cv::aruco::Dictionary> dictionary_;
+  cv::Mat camera_matrix_;
+  cv::Mat dist_coeffs_;
+
+  rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_sub_;
+  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
+  rclcpp::Publisher<MarkerArray>::SharedPtr markers_pub_;
 };
 
 int main(int argc, char * argv[]) {
-    rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<ArucoDetector>());
-    rclcpp::shutdown();
-    return 0;
+  rclcpp::init(argc, argv);
+  rclcpp::spin(std::make_shared<ArucoDetector>());
+  rclcpp::shutdown();
+  return 0;
 }
