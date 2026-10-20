@@ -1,59 +1,95 @@
-# ROS 2 ArUco Pose Tracking
+# ROS 2 ArUco Multi-Robot Localization
 
-Real-time 3D localization of ArUco fiducial markers using **ROS 2 Jazzy**, **OpenCV** and **TF2**.
-Developed as part of my Bachelor's Thesis (TFG) at the Budapest University of Technology and Economics (BME), working with the lab's robotic platforms under weekly supervision.
+Real-time 2D localization of multiple mobile robots with an overhead camera, using **ROS 2 Jazzy**, **OpenCV** and ArUco fiducial markers.
+Developed as part of my Bachelor's Thesis (TFG) at the Budapest University of Technology and Economics (BME), in weekly iterations agreed with my supervisor.
 
 ![Detected ArUco marker with 3D axes](docs/media/demo.png)
 
 ## Overview
 
-A C++ ROS 2 node subscribes to a camera feed, detects ArUco markers, estimates each marker's 6-DoF pose relative to the camera and publishes it to the TF2 tree, so any other node in the system can query where the marker is in space.
+A camera mounted on the ceiling looks down at the floor. A large **reference marker** fixed to the floor defines the ground frame, and each robot carries a small marker on top. The system computes every robot's **position (x, y) and heading** on the floor and publishes them so they can be sent back to the robots.
 
-**Pipeline:**
-`/image_raw` → ArUco detection (custom 4x4 dictionary) → pose estimation (`estimatePoseSingleMarkers`) → rotation vector → rotation matrix (Rodrigues) → quaternion → TF2 broadcast `camera_frame → marker_<id>`
+Because all poses are expressed relative to the reference marker, the result does not depend on the camera's position or tilt.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    cam[usb_cam] -- /image_raw --> det[detector_node]
+    det -- /aruco/markers --> ref[reference_node]
+    det -- /aruco/markers --> pos[robot_pos_node]
+    ref -- /reference_tf --> pos
+    pos -- /positions --> out[robots]
+```
+
+| Node | Role |
+|------|------|
+| `detector_node` | Detects ArUco markers and estimates the 3D pose of each one relative to the camera (marker size depends on its ID) |
+| `reference_node` | Selects the floor reference marker (ID 1), which defines the ground plane, and keeps its last known pose to tolerate brief occlusions |
+| `robot_pos_node` | Expresses every robot marker in the ground frame and publishes its 2D pose |
 
 ## ROS interface
 
-| Type | Name | Description |
-|------|------|-------------|
-| Subscribed topic | `/image_raw` (`sensor_msgs/Image`) | Camera feed |
-| Published topic | `/aruco/image_out` (`sensor_msgs/Image`) | Feed annotated with marker outlines, IDs and 3D axes |
-| TF transform | `camera_frame → marker_<id>` | Pose of every detected marker |
+| Topic | Message type | Content |
+|-------|--------------|---------|
+| `/image_raw` | `sensor_msgs/Image` | Camera feed |
+| `/aruco/image_out` | `sensor_msgs/Image` | Feed annotated with marker IDs and 3D axes |
+| `/aruco/markers` | `aruco_interfaces/MarkerArray` | ID, translation and rotation vector of every detected marker (camera frame) |
+| `/reference_tf` | `aruco_interfaces/Marker` | Pose of the reference marker (ground frame origin) |
+| `/positions` | `aruco_interfaces/RobotPose2DArray` | ID, x, y (m) and heading (rad) of every robot in the ground frame |
+
+Custom messages live in the separate `aruco_interfaces` package so that any other component (robots, microcontrollers) can use them without depending on the perception code.
+
+## How the 2D pose is computed
+
+Rotations are handled as rotation matrices (no quaternions):
+
+- **Position:** `p = R_refᵀ · (t_robot − t_ref)`. The vector from the reference to the robot, expressed in the ground frame; x and y are kept.
+- **Heading:** the robot marker's X axis is expressed in the ground frame and its angle is `atan2(y, x)`.
+
+## Markers
+
+| ID | Role | Size |
+|----|------|------|
+| 1 | Floor reference | 195 mm |
+| 0, 2, 3 | Robots | 100 mm |
+
+Custom dictionary: `generateCustomDictionary(10, 4, 0)`. Marker sizes and the reference ID are ROS parameters.
 
 ## Tech stack
 
-C++17 · ROS 2 Jazzy · OpenCV 4.6 (aruco module) · TF2 · cv_bridge · Ubuntu 24.04
+C++17 · ROS 2 Jazzy · OpenCV 4.6 (aruco module) · cv_bridge · Ubuntu 24.04
 
 ## Build and run
 
 ```bash
 cd ~/ros2_ws
-colcon build --packages-select aruco_perception
+colcon build --packages-select aruco_interfaces aruco_perception
 source install/setup.bash
 
-# Terminal 1: camera driver
 ros2 run usb_cam usb_cam_node_exe --ros-args -p pixel_format:=mjpeg2rgb
-
-# Terminal 2: detector
 ros2 run aruco_perception detector_node
+ros2 run aruco_perception reference_node
+ros2 run aruco_perception robot_pos_node
 
-# Inspect the output
-ros2 run rqt_image_view rqt_image_view /aruco/image_out
-ros2 run tf2_ros tf2_echo camera_frame marker_0
+ros2 topic echo /positions
 ```
 
-## Progress log
+(Each `ros2 run` in its own terminal.)
 
-The thesis is developed in weekly iterations agreed with my supervisor.
+## Progress log
 
 | Week | Focus | Log |
 |------|-------|-----|
 | 1 | Environment setup, camera pipeline, first detection attempts | [Week 1](docs/weeks/week-01.md) |
 | 2 | Custom dictionary, 3D pose estimation, TF2 integration | [Week 2](docs/weeks/week-02.md) |
+| 3 | Multi-robot 2D localization architecture | [Week 3](docs/weeks/week-03.md) |
 
 ## Known limitations and next steps
 
-- **Camera intrinsics are placeholders** (fx = fy = 800, principal point at 320×240, zero distortion), so distances are approximate. Next: calibrate the real camera with the `camera_calibration` package.
-- Marker size, dictionary and frame names are hard-coded. Next: expose them as ROS parameters.
-- `estimatePoseSingleMarkers` is deprecated from OpenCV 4.7. Next: migrate to `cv::solvePnP`.
-- Poses are relative to the camera only. Next: use an ArUco marker fixed to the floor as the world reference frame, so marker poses become independent of the camera's position and tilt.
+- **Camera intrinsics are placeholders**, so absolute values are approximate. Next: calibrate the real camera.
+- The reference pose comes from a single detection. Next: filter it over several frames to reduce noise.
+- A single camera cannot see robots that are occluded. Possible extension: multiple overhead cameras.
+- Next: a launch file to start the whole system with one command.
+- Next: micro-ROS on an ESP32 to bring the robot side into ROS 2.
+- Final goal: deploy the system on a Raspberry Pi with the camera.
