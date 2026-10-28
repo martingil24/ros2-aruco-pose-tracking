@@ -67,15 +67,12 @@ cd ~/ros2_ws
 colcon build --packages-select aruco_interfaces aruco_perception
 source install/setup.bash
 
-ros2 run usb_cam usb_cam_node_exe --ros-args -p pixel_format:=mjpeg2rgb
-ros2 run aruco_perception detector_node
-ros2 run aruco_perception reference_node
-ros2 run aruco_perception robot_pos_node
+# Start the camera and all nodes with one command
+ros2 launch aruco_perception localization.launch.py
 
+# In another terminal: inspect the output
 ros2 topic echo /positions
 ```
-
-(Each `ros2 run` in its own terminal.)
 
 ## Progress log
 
@@ -84,12 +81,12 @@ ros2 topic echo /positions
 | 1 | Environment setup, camera pipeline, first detection attempts | [Week 1](docs/weeks/week-01.md) |
 | 2 | Custom dictionary, 3D pose estimation, TF2 integration | [Week 2](docs/weeks/week-02.md) |
 | 3 | Multi-robot 2D localization architecture | [Week 3](docs/weeks/week-03.md) |
+| 4 | Launch file to start the whole system | [Week 4](docs/weeks/week-04.md) |
 
 ## Known limitations and next steps
 
 - **Camera intrinsics are placeholders**, so absolute values are approximate. Next: calibrate the real camera.
 - The reference pose comes from a single detection. Next: filter it over several frames to reduce noise.
 - A single camera cannot see robots that are occluded. Possible extension: multiple overhead cameras.
-- Next: a launch file to start the whole system with one command.
 - Next: micro-ROS on an ESP32 to bring the robot side into ROS 2.
 - Final goal: deploy the system on a Raspberry Pi with the camera.
