@@ -74,6 +74,10 @@ ros2 launch aruco_perception localization.launch.py
 ros2 topic echo /positions
 ```
 
+## ESP32 (micro-ROS)
+
+The robot side runs micro-ROS on an ESP32, which connects over WiFi to a micro-ROS Agent and publishes topics into ROS 2. See [`esp32/microros_publisher`](esp32/microros_publisher).
+
 ## Progress log
 
 | Week | Focus | Log |
@@ -82,11 +86,12 @@ ros2 topic echo /positions
 | 2 | Custom dictionary, 3D pose estimation, TF2 integration | [Week 2](docs/weeks/week-02.md) |
 | 3 | Multi-robot 2D localization architecture | [Week 3](docs/weeks/week-03.md) |
 | 4 | Launch file to start the whole system | [Week 4](docs/weeks/week-04.md) |
+| 5 | ESP32 with micro-ROS over WiFi | [Week 5](docs/weeks/week-05.md) |
 
 ## Known limitations and next steps
 
 - **Camera intrinsics are placeholders**, so absolute values are approximate. Next: calibrate the real camera.
 - The reference pose comes from a single detection. Next: filter it over several frames to reduce noise.
 - A single camera cannot see robots that are occluded. Possible extension: multiple overhead cameras.
-- Next: micro-ROS on an ESP32 to bring the robot side into ROS 2.
+- Next: ESP32 firmware that publishes the robot sensor data (dummy values first).
 - Final goal: deploy the system on a Raspberry Pi with the camera.
