@@ -1,0 +1,8 @@
+# Local configuration: contains the WiFi password, never commit it
+sdkconfig
+sdkconfig.old
+# Generated or downloaded files
+build/
+managed_components/
+components/micro_ros_espidf_component/
+dependencies.lock
