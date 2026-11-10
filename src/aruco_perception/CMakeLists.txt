@@ -7,6 +7,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(aruco_interfaces REQUIRED)
+find_package(geometry_msgs REQUIRED)
 
 include_directories(${OpenCV_INCLUDE_DIRS})
 
@@ -18,7 +19,7 @@ add_executable(reference_node src/reference_node.cpp)
 ament_target_dependencies(reference_node rclcpp aruco_interfaces)
 
 add_executable(robot_pos_node src/robot_pos_node.cpp)
-ament_target_dependencies(robot_pos_node rclcpp aruco_interfaces)
+ament_target_dependencies(robot_pos_node rclcpp aruco_interfaces geometry_msgs)
 target_link_libraries(robot_pos_node ${OpenCV_LIBS})
 
 install(TARGETS detector_node reference_node robot_pos_node
