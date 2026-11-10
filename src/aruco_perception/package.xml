@@ -13,6 +13,7 @@
   <depend>cv_bridge</depend>
   <depend>libopencv-dev</depend>
   <depend>aruco_interfaces</depend>
+  <depend>geometry_msgs</depend>
 
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>usb_cam</exec_depend>
