@@ -1,0 +1,19 @@
+menu "Robot firmware settings"
+
+    config MICRO_ROS_APP_STACK
+        int "Stack size of the micro-ROS task (bytes)"
+        default 16000
+
+    config MICRO_ROS_APP_TASK_PRIO
+        int "Priority of the micro-ROS task"
+        default 5
+
+    config ROBOT_DUMMY_ID
+        int "Robot ID used until the DIP switch is read"
+        range 0 7
+        default 2
+        help
+            The real robot reads its ID from a 3-bit DIP switch (0-7).
+            It should match the ArUco marker ID on top of the robot.
+
+endmenu

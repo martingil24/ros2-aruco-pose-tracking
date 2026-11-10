@@ -37,6 +37,7 @@ flowchart LR
 | `/aruco/markers` | `aruco_interfaces/MarkerArray` | ID, translation and rotation vector of every detected marker (camera frame) |
 | `/reference_tf` | `aruco_interfaces/Marker` | Pose of the reference marker (ground frame origin) |
 | `/positions` | `aruco_interfaces/RobotPose2DArray` | ID, x, y (m) and heading (rad) of every robot in the ground frame |
+| `/robot_<id>/pose` | `geometry_msgs/Pose2D` | Pose of one robot, sent to that robot (ESP32) |
 
 Custom messages live in the separate `aruco_interfaces` package so that any other component (robots, microcontrollers) can use them without depending on the perception code.
 
@@ -76,7 +77,7 @@ ros2 topic echo /positions
 
 ## ESP32 (micro-ROS)
 
-The robot side runs micro-ROS on an ESP32, which connects over WiFi to a micro-ROS Agent and publishes topics into ROS 2. See [`esp32/microros_publisher`](esp32/microros_publisher).
+The robot side runs micro-ROS on an ESP32, which connects over WiFi to a micro-ROS Agent and publishes topics into ROS 2. The robot firmware, [`esp32/robot_firmware`](esp32/robot_firmware), sends all sensor data (dummy values for now) and receives velocity commands and its pose under `/robot_<id>/`. The first test, a simple counter, is in [`esp32/microros_publisher`](esp32/microros_publisher).
 
 ## Progress log
 
@@ -87,11 +88,12 @@ The robot side runs micro-ROS on an ESP32, which connects over WiFi to a micro-R
 | 3 | Multi-robot 2D localization architecture | [Week 3](docs/weeks/week-03.md) |
 | 4 | Launch file to start the whole system | [Week 4](docs/weeks/week-04.md) |
 | 5 | ESP32 with micro-ROS over WiFi | [Week 5](docs/weeks/week-05.md) |
+| 6 | ESP32 message layer with dummy sensor data | [Week 6](docs/weeks/week-06.md) |
 
 ## Known limitations and next steps
 
 - **Camera intrinsics are placeholders**, so absolute values are approximate. Next: calibrate the real camera.
 - The reference pose comes from a single detection. Next: filter it over several frames to reduce noise.
 - A single camera cannot see robots that are occluded. Possible extension: multiple overhead cameras.
-- Next: ESP32 firmware that publishes the robot sensor data (dummy values first).
+- Next: connect the real robot sensors to the ESP32 firmware and drive the motors from `cmd_vel`.
 - Final goal: deploy the system on a Raspberry Pi with the camera.

@@ -1,15 +1,21 @@
 // Robot pose node: expresses every robot marker in the ground frame defined by
-// the reference marker and publishes its 2D pose (x, y, heading) on /positions.
+// the reference marker and publishes its 2D pose (x, y, heading):
+//   - /positions: all robots in one message
+//   - /robot_<id>/pose: each robot on its own topic, so every robot (ESP32)
+//     only receives its own pose
 // Rotations are handled as rotation matrices (no quaternions).
 
 #include <array>
 #include <cmath>
+#include <map>
 #include <memory>
+#include <string>
 
 #include "rclcpp/rclcpp.hpp"
 #include <opencv2/core.hpp>
 #include <opencv2/calib3d.hpp>
 
+#include "geometry_msgs/msg/pose2_d.hpp"
 #include "aruco_interfaces/msg/marker.hpp"
 #include "aruco_interfaces/msg/marker_array.hpp"
 #include "aruco_interfaces/msg/robot_pose2_d.hpp"
@@ -19,6 +25,7 @@ using aruco_interfaces::msg::Marker;
 using aruco_interfaces::msg::MarkerArray;
 using aruco_interfaces::msg::RobotPose2D;
 using aruco_interfaces::msg::RobotPose2DArray;
+using geometry_msgs::msg::Pose2D;
 
 class RobotPosNode : public rclcpp::Node {
 public:
@@ -45,6 +52,19 @@ private:
     cv::Matx33d R;
     cv::Rodrigues(cv::Vec3d(rvec[0], rvec[1], rvec[2]), R);
     return R;
+  }
+
+  // Publisher of /robot_<id>/pose, created the first time that robot is seen
+  rclcpp::Publisher<Pose2D>::SharedPtr pose_publisher(int id) {
+    auto it = pose_pubs_.find(id);
+    if (it != pose_pubs_.end()) {
+      return it->second;
+    }
+    const std::string topic = "/robot_" + std::to_string(id) + "/pose";
+    auto pub = create_publisher<Pose2D>(topic, 10);
+    pose_pubs_[id] = pub;
+    RCLCPP_INFO(get_logger(), "Robot %d detected, publishing its pose on %s", id, topic.c_str());
+    return pub;
   }
 
   void markers_callback(const MarkerArray::SharedPtr msg) {
@@ -82,6 +102,13 @@ private:
       robot.y = p[1];
       robot.heading = std::atan2(x_axis_ground[1], x_axis_ground[0]);
       out.robots.push_back(robot);
+
+      // Same pose on the robot's own topic
+      Pose2D pose;
+      pose.x = robot.x;
+      pose.y = robot.y;
+      pose.theta = robot.heading;
+      pose_publisher(robot.id)->publish(pose);
     }
 
     positions_pub_->publish(out);
@@ -94,6 +121,7 @@ private:
   rclcpp::Subscription<Marker>::SharedPtr reference_sub_;
   rclcpp::Subscription<MarkerArray>::SharedPtr markers_sub_;
   rclcpp::Publisher<RobotPose2DArray>::SharedPtr positions_pub_;
+  std::map<int, rclcpp::Publisher<Pose2D>::SharedPtr> pose_pubs_;
 };
 
 int main(int argc, char * argv[]) {
