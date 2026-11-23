@@ -25,6 +25,6 @@ target_link_libraries(robot_pos_node ${OpenCV_LIBS})
 install(TARGETS detector_node reference_node robot_pos_node
   DESTINATION lib/${PROJECT_NAME})
 
-install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
+install(DIRECTORY launch config DESTINATION share/${PROJECT_NAME})
 
 ament_package()

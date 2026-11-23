@@ -1,0 +1,20 @@
+# Parameters of the localization system, loaded by localization.launch.py.
+# Edit this file and relaunch: no need to recompile.
+
+# Shared by every node
+/**:
+  ros__parameters:
+    reference_id: 1            # floor reference marker
+
+usb_cam:
+  ros__parameters:
+    pixel_format: mjpeg2rgb
+
+aruco_detector_node:
+  ros__parameters:
+    reference_marker_size: 0.195   # metres
+    robot_marker_size: 0.10        # metres
+
+robot_pos_node:
+  ros__parameters:
+    robot_ids: [0, 2, 3]       # marker IDs that are robots; any other ID is ignored
