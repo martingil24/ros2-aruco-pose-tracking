@@ -5,11 +5,13 @@
 //     only receives its own pose
 // Rotations are handled as rotation matrices (no quaternions).
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <map>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "rclcpp/rclcpp.hpp"
 #include <opencv2/core.hpp>
@@ -31,6 +33,9 @@ class RobotPosNode : public rclcpp::Node {
 public:
   RobotPosNode() : Node("robot_pos_node") {
     reference_id_ = declare_parameter<int>("reference_id", 1);
+    // Marker IDs that belong to robots; any other ID is ignored (empty = accept all).
+    // Read on every frame, so it can be changed live with `ros2 param set`.
+    declare_parameter<std::vector<int64_t>>("robot_ids", std::vector<int64_t>{});
 
     reference_sub_ = create_subscription<Marker>(
       "/reference_tf", 10,
@@ -82,9 +87,15 @@ private:
     out.header = msg->header;
     out.header.frame_id = "ground";
 
+    const auto robot_ids = get_parameter("robot_ids").as_integer_array();
+
     for (const auto & m : msg->markers) {
       if (m.id == reference_id_) {
         continue;  // the reference is not a robot
+      }
+      if (!robot_ids.empty() &&
+          std::find(robot_ids.begin(), robot_ids.end(), m.id) == robot_ids.end()) {
+        continue;  // not a known robot: false detection or unused marker
       }
 
       // Position: camera frame -> ground frame
