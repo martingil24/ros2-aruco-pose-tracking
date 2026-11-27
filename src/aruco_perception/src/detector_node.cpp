@@ -2,6 +2,7 @@
 // the ID and pose (camera frame) of every marker on /aruco/markers.
 
 #include <memory>
+#include <stdexcept>
 #include <vector>
 
 #include "rclcpp/rclcpp.hpp"
@@ -27,9 +28,19 @@ public:
     // The lab markers use a custom dictionary: 10 markers, 4x4 bits, seed 0
     dictionary_ = cv::aruco::generateCustomDictionary(10, 4, 0);
 
-    // Placeholder camera intrinsics (to be replaced by a real calibration)
-    camera_matrix_ = (cv::Mat_<double>(3, 3) << 800.0, 0, 320.0, 0, 800.0, 240.0, 0, 0, 1);
-    dist_coeffs_ = cv::Mat::zeros(5, 1, CV_64F);
+    // Camera intrinsics from the calibration (config/params.yaml).
+    // Defaults are the old placeholder values, only used if no calibration is given.
+    const auto K = declare_parameter<std::vector<double>>(
+      "camera_matrix", {800.0, 0.0, 320.0, 0.0, 800.0, 240.0, 0.0, 0.0, 1.0});
+    const auto D = declare_parameter<std::vector<double>>(
+      "distortion_coefficients", {0.0, 0.0, 0.0, 0.0, 0.0});
+    if (K.size() != 9) {
+      throw std::runtime_error("camera_matrix must have 9 values (3x3, row by row)");
+    }
+    camera_matrix_ = cv::Mat(K, true).reshape(1, 3);
+    dist_coeffs_ = cv::Mat(D, true);
+    RCLCPP_INFO(get_logger(), "Camera intrinsics: fx=%.1f fy=%.1f cx=%.1f cy=%.1f",
+                K[0], K[4], K[2], K[5]);
 
     image_sub_ = create_subscription<sensor_msgs::msg::Image>(
       "/image_raw", 10,

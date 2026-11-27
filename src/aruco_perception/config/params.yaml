@@ -14,6 +14,10 @@ aruco_detector_node:
   ros__parameters:
     reference_marker_size: 0.195   # metres
     robot_marker_size: 0.10        # metres
+    # Camera calibration: camera_calibration package, 7x9 inner corners, 21.3 mm squares, 640x480.
+    # Full result in config/calibration/ost.yaml
+    camera_matrix: [528.404410, 0.0, 333.570726, 0.0, 530.238362, 225.451059, 0.0, 0.0, 1.0]
+    distortion_coefficients: [0.066997, 0.026668, -0.011476, 0.007085, 0.0]
 
 robot_pos_node:
   ros__parameters:
